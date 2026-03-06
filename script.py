@@ -15,24 +15,35 @@ def mm_to_ft(mm_val):
     return mm_val / 304.8
 
 def get_views_smart():
-    """Chỉ lấy View Mặt đứng hoặc Mặt cắt."""
+    """Chỉ lấy View Mặt đứng, Mặt cắt hoặc Detail."""
     sel_ids = uidoc.Selection.GetElementIds()
     selected_views = []
     
     def is_valid_view(v):
-        return not v.IsTemplate and v.ViewType in [DB.ViewType.Section, DB.ViewType.Elevation]
+        if not v or not isinstance(v, DB.View): return False
+        return not v.IsTemplate and v.ViewType in [DB.ViewType.Section, DB.ViewType.Elevation, DB.ViewType.Detail]
 
     if sel_ids:
         for eid in sel_ids:
             el = doc.GetElement(eid)
-            if isinstance(el, DB.Viewport):
-                view = doc.GetElement(el.ViewId)
-                if view and is_valid_view(view): selected_views.append(view)
+            
+            # Nếu người dùng chọn View trên sheet (Viewport)
+            if isinstance(el, DB.Viewport) or hasattr(el, "ViewId"):
+                try:
+                    view_id = el.ViewId if hasattr(el, "ViewId") else None
+                    if view_id and view_id != DB.ElementId.InvalidElementId:
+                        view = doc.GetElement(view_id)
+                        if view and is_valid_view(view):
+                            if view.Id not in [v.Id for v in selected_views]:
+                                selected_views.append(view)
+                except:
+                    pass
+            # Nếu người dùng chọn View trong Project Browser
             elif isinstance(el, DB.View) and is_valid_view(el):
-                selected_views.append(el)
+                if el.Id not in [v.Id for v in selected_views]:
+                    selected_views.append(el)
                 
-    # Nếu danh sách rỗng (do không chọn gì hoặc đang chọn đối tượng khác như Level, Grid)
-    # thì tự động lấy view hiện hành nếu view đó hợp lệ.
+    # Nếu danh sách rỗng, tự động lấy view hiện hành nếu view đó hợp lệ.
     if not selected_views:
         if isinstance(doc.ActiveView, DB.View) and is_valid_view(doc.ActiveView):
             selected_views.append(doc.ActiveView)
